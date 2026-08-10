@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- General -->
+    <string name="str_app_title">🥽 VR Viewer</string>
+    <string name="str_connect_subtitle">Connect your PC with SteamVR</string>
+    <string name="str_connected">Connected</string>
+    <string name="str_view_tutorial">View tutorial</string>
+    <string name="str_use_hub_menu">🖐️ Usar Menú Hub</string>
+
+    <!-- Stream -->
+    <string name="str_connecting_stream">Connecting to stream…</string>
+    <string name="str_close">Close</string>
+    <string name="str_quality">⚙ Quality</string>
+    <string name="str_lenses">🔍 Lenses</string>
+    <string name="str_stream_quality_title">Stream quality</string>
+    <string name="str_lens_adjust_title">Lens adjustment</string>
+    <string name="str_reset">↺ Reset</string>
+    <string name="str_view_steamvr">📺 View SteamVR on screen</string>
+    <string name="str_recenter">⟳ Recenter HMD</string>
+
+    <!-- Connection -->
+    <string name="str_tab_wifi">📶 WiFi</string>
+    <string name="str_tab_cable">🔌 USB Cable</string>
+    <string name="str_autodetect_title">Auto-detection</string>
+    <string name="str_scan_again">Scan again</string>
+    <string name="str_manual_ip_title">Or enter the IP manually</string>
+    <string name="str_connect">Connect</string>
+    <string name="hint_ip_wifi">192.168.1.X</string>
+
+    <string name="str_cable_howto_title">How to connect via cable</string>
+    <string name="str_cable_step1">Connect the USB cable between the phone and the PC</string>
+    <string name="str_cable_step2">In Settings → Hotspot → enable “USB tethering”</string>
+    <string name="str_cable_step3">The PC will get IP 192.168.42.1 automatically</string>
+    <string name="str_usb_not_detected">USB cable not detected</string>
+    <string name="str_refresh">Refresh</string>
+    <string name="str_connect_cable">🔌 Connect via cable</string>
+    <string name="str_cable_note">No WiFi needed · No PC install required</string>
+    <string name="hint_ip_cable">192.168.42.1</string>
+
+    <!-- Control panel -->
+    <string name="str_gamepad_none">No controller connected</string>
+    <string name="str_hmd_tracking">HMD Tracking</string>
+    <string name="str_gyroscope">Gyroscope</string>
+    <string name="str_hand_tracking">Hand tracking</string>
+    <string name="str_sixdof_tracking">6DoF tracking (real position)</string>
+    <string name="str_sensitivity">Sensitivity</string>
+
+    <string name="str_sixdof_mode_title">6DoF mode</string>
+    <string name="str_sixdof_plain">6DoF only</string>
+    <string name="str_sixdof_leds">🔵 6DoF + hand LEDs</string>
+    <string name="str_sixdof_handtracking">✋ 6DoF + Hands</string>
+    <string name="str_sixdof_handjoycons">🕹 6DoF + Hands + Joycons</string>
+
+    <string name="str_tracking_mode_title">Tracking mode</string>
+    <string name="str_mode_none">🚫 None</string>
+    <string name="str_mode_hand">✋ Hands</string>
+    <string name="str_mode_led_blue">🔵 Blue LED</string>
+    <string name="str_mode_led_green">🟢 Green LED</string>
+    <string name="str_mode_hand_joycons">🕹 Hands + Joycons</string>
+
+    <string name="str_camera_skeleton">Camera + skeleton view</string>
+    <string name="str_eye_tracking">Eye Tracking (VRChat OSC)</string>
+    <string name="str_eye_tracking_status">Front camera · OSC to VRChat, port 9000</string>
+
+</resources>

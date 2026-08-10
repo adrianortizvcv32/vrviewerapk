@@ -1,0 +1,1463 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/rootLayout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_root"
+    android:focusable="false"
+    android:focusableInTouchMode="false">
+
+    <!-- Cámara + skeleton overlay -->
+    <FrameLayout
+        android:id="@+id/cameraOverlayPanel"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:focusable="false"
+        android:focusableInTouchMode="false"
+        android:visibility="gone">
+
+        <androidx.camera.view.PreviewView
+            android:id="@+id/cameraPreviewView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:focusable="false"
+            android:focusableInTouchMode="false" />
+
+        <com.example.vrviewer.SkeletonOverlayView
+            android:id="@+id/skeletonOverlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:focusable="false"
+            android:focusableInTouchMode="false" />
+
+    </FrameLayout>
+
+    <!-- Stream SteamVR (H.264) con distorsión de lente -->
+    <FrameLayout
+        android:id="@+id/streamPanel"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/bg_root"
+        android:visibility="gone"
+        android:focusable="false"
+        android:focusableInTouchMode="false"
+        android:elevation="8dp">
+
+        <android.opengl.GLSurfaceView
+            android:id="@+id/streamGLSurfaceView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <LinearLayout
+            android:id="@+id/streamLoadingOverlay"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="24dp"
+            android:background="@drawable/bg_loading_chip">
+
+            <ProgressBar
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:indeterminate="true"
+                android:indeterminateTint="@color/accent_indigo"
+                android:layout_marginBottom="12dp" />
+
+            <TextView
+                android:id="@+id/streamStatusOverlayText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/str_connecting_stream"
+                android:textColor="@color/text_primary"
+                android:fontFamily="sans-serif-medium"
+                android:textSize="14sp"
+                android:gravity="center" />
+
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/closeStreamButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|end"
+            android:layout_margin="14dp"
+            android:text="@string/str_close"
+            android:textColor="@color/text_primary"
+            android:textSize="12sp"
+            android:fontFamily="sans-serif-medium"
+            android:background="@drawable/bg_btn_ghost"
+            android:stateListAnimator="@null"
+            android:paddingHorizontal="18dp"
+            android:paddingVertical="10dp" />
+
+        <!-- Recentrar HMD: se oculta/muestra junto con los demás controles
+             del stream (calidad, lentes, cerrar) al deslizar arriba/abajo. -->
+        <Button
+            android:id="@+id/recenterHmdButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|start"
+            android:layout_margin="14dp"
+            android:text="Recentrar HMD"
+            android:textColor="@color/text_primary"
+            android:textSize="12sp"
+            android:fontFamily="sans-serif-medium"
+            android:background="@drawable/bg_btn_ghost"
+            android:stateListAnimator="@null"
+            android:paddingHorizontal="18dp"
+            android:paddingVertical="10dp" />
+
+        <!-- Ajustes de calidad -->
+        <Button
+            android:id="@+id/qualityToggleButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|end"
+            android:layout_margin="14dp"
+            android:text="@string/str_quality"
+            android:textColor="@color/text_primary"
+            android:textSize="12sp"
+            android:fontFamily="sans-serif-medium"
+            android:background="@drawable/bg_btn_ghost"
+            android:stateListAnimator="@null"
+            android:paddingHorizontal="18dp"
+            android:paddingVertical="10dp" />
+
+        <!-- Ajustes de lente -->
+        <Button
+            android:id="@+id/lensToggleButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|start"
+            android:layout_margin="14dp"
+            android:text="@string/str_lenses"
+            android:textColor="@color/text_primary"
+            android:textSize="12sp"
+            android:fontFamily="sans-serif-medium"
+            android:background="@drawable/bg_btn_ghost"
+            android:stateListAnimator="@null"
+            android:paddingHorizontal="18dp"
+            android:paddingVertical="10dp" />
+
+        <!-- Panel: resolución / bitrate / fps -->
+        <LinearLayout
+            android:id="@+id/streamQualityPanel"
+            android:layout_width="260dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|end"
+            android:layout_marginEnd="14dp"
+            android:layout_marginBottom="60dp"
+            android:orientation="vertical"
+            android:background="@drawable/bg_panel_float"
+            android:padding="16dp"
+            android:visibility="gone">
+
+            <TextView
+                android:text="@string/str_stream_quality_title"
+                android:textColor="@color/text_label"
+                android:textSize="12sp"
+                android:fontFamily="sans-serif-medium"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="8dp">
+
+                <Button
+                    android:id="@+id/resDownButton"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:text="−"
+                    android:textSize="16sp"
+                    android:textColor="@color/text_primary"
+                    android:background="@drawable/bg_btn_stepper"
+                    android:stateListAnimator="@null" />
+
+                <TextView
+                    android:id="@+id/resLabelText"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="Media (1280×720)"
+                    android:textColor="@color/text_primary"
+                    android:fontFamily="sans-serif-medium"
+                    android:textSize="12sp" />
+
+                <Button
+                    android:id="@+id/resUpButton"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:text="+"
+                    android:textSize="16sp"
+                    android:textColor="@color/text_primary"
+                    android:background="@drawable/bg_btn_stepper"
+                    android:stateListAnimator="@null" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="8dp">
+
+                <Button
+                    android:id="@+id/brDownButton"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:text="−"
+                    android:textSize="16sp"
+                    android:textColor="@color/text_primary"
+                    android:background="@drawable/bg_btn_stepper"
+                    android:stateListAnimator="@null" />
+
+                <TextView
+                    android:id="@+id/brLabelText"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="2.5 Mbps"
+                    android:textColor="@color/text_primary"
+                    android:fontFamily="sans-serif-medium"
+                    android:textSize="12sp" />
+
+                <Button
+                    android:id="@+id/brUpButton"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:text="+"
+                    android:textSize="16sp"
+                    android:textColor="@color/text_primary"
+                    android:background="@drawable/bg_btn_stepper"
+                    android:stateListAnimator="@null" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <Button
+                    android:id="@+id/fpsDownButton"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:text="−"
+                    android:textSize="16sp"
+                    android:textColor="@color/text_primary"
+                    android:background="@drawable/bg_btn_stepper"
+                    android:stateListAnimator="@null" />
+
+                <TextView
+                    android:id="@+id/fpsLabelText"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="30 FPS"
+                    android:textColor="@color/text_primary"
+                    android:fontFamily="sans-serif-medium"
+                    android:textSize="12sp" />
+
+                <Button
+                    android:id="@+id/fpsUpButton"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:text="+"
+                    android:textSize="16sp"
+                    android:textColor="@color/text_primary"
+                    android:background="@drawable/bg_btn_stepper"
+                    android:stateListAnimator="@null" />
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- Panel: distorsión / separación / lupa -->
+        <LinearLayout
+            android:id="@+id/streamLensPanel"
+            android:layout_width="260dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|start"
+            android:layout_marginStart="14dp"
+            android:layout_marginBottom="60dp"
+            android:orientation="vertical"
+            android:background="@drawable/bg_panel_float"
+            android:padding="16dp"
+            android:visibility="gone">
+
+            <TextView
+                android:text="@string/str_lens_adjust_title"
+                android:textColor="@color/text_label"
+                android:textSize="12sp"
+                android:fontFamily="sans-serif-medium"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="8dp">
+
+                <Button
+                    android:id="@+id/distDownButton"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:text="−"
+                    android:textSize="16sp"
+                    android:textColor="@color/text_primary"
+                    android:background="@drawable/bg_btn_stepper"
+                    android:stateListAnimator="@null" />
+
+                <TextView
+                    android:id="@+id/distLabelText"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="Distorsión: 0.22"
+                    android:textColor="@color/text_primary"
+                    android:fontFamily="sans-serif-medium"
+                    android:textSize="12sp" />
+
+                <Button
+                    android:id="@+id/distUpButton"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:text="+"
+                    android:textSize="16sp"
+                    android:textColor="@color/text_primary"
+                    android:background="@drawable/bg_btn_stepper"
+                    android:stateListAnimator="@null" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="8dp">
+
+                <Button
+                    android:id="@+id/sepDownButton"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:text="−"
+                    android:textSize="16sp"
+                    android:textColor="@color/text_primary"
+                    android:background="@drawable/bg_btn_stepper"
+                    android:stateListAnimator="@null" />
+
+                <TextView
+                    android:id="@+id/sepLabelText"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="Separación: 0.00"
+                    android:textColor="@color/text_primary"
+                    android:fontFamily="sans-serif-medium"
+                    android:textSize="12sp" />
+
+                <Button
+                    android:id="@+id/sepUpButton"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:text="+"
+                    android:textSize="16sp"
+                    android:textColor="@color/text_primary"
+                    android:background="@drawable/bg_btn_stepper"
+                    android:stateListAnimator="@null" />
+            </LinearLayout>
+
+            <!-- Lupa: acerca la imagen dentro de cada lente, independiente de la distorsión -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="4dp">
+
+                <Button
+                    android:id="@+id/zoomDownButton"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:text="−"
+                    android:textSize="16sp"
+                    android:textColor="@color/text_primary"
+                    android:background="@drawable/bg_btn_stepper"
+                    android:stateListAnimator="@null" />
+
+                <TextView
+                    android:id="@+id/zoomLabelText"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="🔎 Lupa: 1.00×"
+                    android:textColor="@color/text_primary"
+                    android:fontFamily="sans-serif-medium"
+                    android:textSize="12sp" />
+
+                <Button
+                    android:id="@+id/zoomUpButton"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:text="+"
+                    android:textSize="16sp"
+                    android:textColor="@color/text_primary"
+                    android:background="@drawable/bg_btn_stepper"
+                    android:stateListAnimator="@null" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/lensResetButton"
+                android:layout_width="match_parent"
+                android:layout_height="38dp"
+                android:layout_marginTop="8dp"
+                android:text="@string/str_reset"
+                android:textColor="@color/accent_amber"
+                android:fontFamily="sans-serif-medium"
+                android:textSize="11sp"
+                android:background="@drawable/bg_btn_secondary"
+                android:stateListAnimator="@null" />
+
+        </LinearLayout>
+
+    </FrameLayout>
+
+    <!-- Fondo del menú de conexión (con contenedor de recorte para el efecto parallax) -->
+    <FrameLayout
+        android:id="@+id/backgroundClipContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipChildren="true"
+        android:clipToPadding="true">
+
+        <ImageView
+            android:id="@+id/connectBackgroundImage"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_margin="-30dp"
+            android:scaleType="centerCrop"
+            android:src="@drawable/bg_connect_menu"
+            android:contentDescription="@null"
+            android:visibility="visible" />
+
+    </FrameLayout>
+
+    <!-- Ver tutorial: flota en la esquina inferior derecha, sobre el fondo.
+         Se oculta junto con connectPanel cuando ya hay una conexión activa
+         (ver MainActivity.connect()). -->
+    <Button
+        android:id="@+id/tutorialButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="20dp"
+        android:text="@string/str_view_tutorial"
+        android:textColor="@color/text_secondary"
+        android:textSize="12sp"
+        android:fontFamily="sans-serif-medium"
+        android:background="@drawable/bg_btn_ghost"
+        android:stateListAnimator="@null"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="10dp" />
+
+    <!-- Menú Hub: modo standalone (sin PC) — cámara + 6DoF + manos en SBS
+         con una ventana flotante controlable por pinch. Se oculta junto con
+         connectPanel al iniciar (ver MainActivity.startHubInternal()). -->
+    <Button
+        android:id="@+id/hubMenuButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|start"
+        android:layout_margin="20dp"
+        android:text="@string/str_use_hub_menu"
+        android:textColor="@color/text_secondary"
+        android:textSize="12sp"
+        android:fontFamily="sans-serif-medium"
+        android:background="@drawable/bg_btn_ghost"
+        android:stateListAnimator="@null"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="10dp" />
+
+    <!-- Panel de conexión -->
+    <LinearLayout
+        android:id="@+id/connectPanel"
+        android:layout_width="400dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:orientation="vertical"
+        android:background="@drawable/bg_card_connect"
+        android:padding="28dp"
+        android:elevation="12dp">
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="4dp">
+
+            <TextView
+                android:text="@string/str_app_title"
+                android:textColor="@color/text_primary"
+                android:textSize="22sp"
+                android:fontFamily="sans-serif-medium"
+                android:textStyle="bold"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center" />
+
+            <!-- Selector de idioma: alterna español/inglés de la app -->
+            <Button
+                android:id="@+id/languageToggleButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top|end"
+                android:text="EN"
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp"
+                android:fontFamily="sans-serif-medium"
+                android:background="@drawable/bg_btn_stepper"
+                android:stateListAnimator="@null"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="6dp"
+                android:minHeight="0dp" />
+
+        </FrameLayout>
+
+        <TextView
+            android:text="@string/str_connect_subtitle"
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginBottom="24dp" />
+
+        <!-- Tabs WiFi / Cable -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="46dp"
+            android:orientation="horizontal"
+            android:background="@drawable/bg_tabs_container"
+            android:padding="4dp"
+            android:layout_marginBottom="20dp">
+
+            <Button
+                android:id="@+id/tabWifi"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:text="@string/str_tab_wifi"
+                android:textSize="13sp"
+                android:fontFamily="sans-serif-medium"
+                android:textColor="@color/text_primary"
+                android:background="@drawable/bg_tab_active"
+                android:stateListAnimator="@null" />
+
+            <Button
+                android:id="@+id/tabCable"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:text="@string/str_tab_cable"
+                android:textSize="13sp"
+                android:fontFamily="sans-serif-medium"
+                android:textColor="@color/text_secondary"
+                android:background="@drawable/bg_tab_inactive"
+                android:stateListAnimator="@null" />
+
+        </LinearLayout>
+
+        <!-- Contenido variable (WiFi / Cable) dentro de un ScrollView acotado,
+             para que en pantallas donde el contenido no quepa (varias PCs
+             detectadas, etc.) no se recorte el campo de IP ni el botón
+             Conectar: se puede hacer scroll para alcanzarlos. -->
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:maxHeight="380dp"
+            android:fadeScrollbars="false"
+            android:scrollbars="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <!-- Contenido: WiFi -->
+                <LinearLayout
+                    android:id="@+id/wifiTabContent"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="visible">
+
+                    <TextView
+                        android:text="@string/str_autodetect_title"
+                        android:textColor="@color/text_label"
+                        android:textSize="12sp"
+                        android:fontFamily="sans-serif-medium"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="10dp" />
+
+                    <TextView
+                        android:id="@+id/scanStatusText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Iniciando búsqueda…"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp"
+                        android:gravity="center"
+                        android:layout_marginBottom="10dp" />
+
+                    <LinearLayout
+                        android:id="@+id/pcListLayout"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:layout_marginBottom="10dp" />
+
+                    <Button
+                        android:id="@+id/scanButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="44dp"
+                        android:text="@string/str_scan_again"
+                        android:textColor="@color/text_primary"
+                        android:fontFamily="sans-serif-medium"
+                        android:textSize="12sp"
+                        android:background="@drawable/bg_btn_secondary"
+                        android:stateListAnimator="@null"
+                        android:layout_marginBottom="20dp" />
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="@color/stroke_soft_2"
+                        android:layout_marginBottom="20dp" />
+
+                    <TextView
+                        android:text="@string/str_manual_ip_title"
+                        android:textColor="@color/text_label"
+                        android:textSize="12sp"
+                        android:fontFamily="sans-serif-medium"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="10dp" />
+
+                    <EditText
+                        android:id="@+id/ipInput"
+                        android:layout_width="match_parent"
+                        android:layout_height="50dp"
+                        android:hint="@string/hint_ip_wifi"
+                        android:textColorHint="@color/text_tertiary"
+                        android:textColor="@color/text_primary"
+                        android:inputType="text"
+                        android:background="@drawable/bg_input_field"
+                        android:paddingHorizontal="14dp"
+                        android:textSize="16sp"
+                        android:layout_marginBottom="12dp" />
+
+                    <Button
+                        android:id="@+id/connectButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="50dp"
+                        android:text="@string/str_connect"
+                        android:textColor="@color/text_primary"
+                        android:fontFamily="sans-serif-medium"
+                        android:background="@drawable/bg_btn_primary"
+                        android:stateListAnimator="@null"
+                        android:layout_marginBottom="10dp" />
+
+                </LinearLayout>
+
+                <!-- Contenido: Cable USB -->
+                <LinearLayout
+                    android:id="@+id/cableTabContent"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:text="@string/str_cable_howto_title"
+                        android:textColor="@color/text_label"
+                        android:textSize="12sp"
+                        android:fontFamily="sans-serif-medium"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="16dp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:layout_marginBottom="12dp">
+
+                        <TextView
+                            android:layout_width="26dp"
+                            android:layout_height="26dp"
+                            android:text="1"
+                            android:textColor="#FFFFFF"
+                            android:textSize="12sp"
+                            android:textStyle="bold"
+                            android:gravity="center"
+                            android:background="@drawable/circle_badge"
+                            android:layout_marginEnd="14dp" />
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/str_cable_step1"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="13sp" />
+
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:layout_marginBottom="12dp">
+
+                        <TextView
+                            android:layout_width="26dp"
+                            android:layout_height="26dp"
+                            android:text="2"
+                            android:textColor="#FFFFFF"
+                            android:textSize="12sp"
+                            android:textStyle="bold"
+                            android:gravity="center"
+                            android:background="@drawable/circle_badge"
+                            android:layout_marginEnd="14dp" />
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/str_cable_step2"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="13sp" />
+
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:layout_marginBottom="20dp">
+
+                        <TextView
+                            android:layout_width="26dp"
+                            android:layout_height="26dp"
+                            android:text="3"
+                            android:textColor="#FFFFFF"
+                            android:textSize="12sp"
+                            android:textStyle="bold"
+                            android:gravity="center"
+                            android:background="@drawable/circle_badge"
+                            android:layout_marginEnd="14dp" />
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/str_cable_step3"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="13sp" />
+
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="@color/stroke_soft_2"
+                        android:layout_marginBottom="20dp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:background="@drawable/bg_status_row"
+                        android:padding="14dp"
+                        android:layout_marginBottom="14dp">
+
+                        <TextView
+                            android:id="@+id/usbStatusDot"
+                            android:layout_width="8dp"
+                            android:layout_height="8dp"
+                            android:text="●"
+                            android:textColor="@color/accent_red"
+                            android:textSize="12sp"
+                            android:layout_marginEnd="12dp" />
+
+                        <TextView
+                            android:id="@+id/usbStatusText"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/str_usb_not_detected"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="12sp" />
+
+                        <Button
+                            android:id="@+id/refreshUsbButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="32dp"
+                            android:text="@string/str_refresh"
+                            android:textSize="11sp"
+                            android:textColor="@color/text_primary"
+                            android:background="@drawable/bg_btn_stepper"
+                            android:stateListAnimator="@null"
+                            android:paddingHorizontal="12dp"
+                            android:paddingVertical="0dp"
+                            android:minHeight="0dp" />
+
+                    </LinearLayout>
+
+                    <EditText
+                        android:id="@+id/cableIpInput"
+                        android:layout_width="match_parent"
+                        android:layout_height="50dp"
+                        android:hint="@string/hint_ip_cable"
+                        android:textColorHint="@color/text_tertiary"
+                        android:textColor="@color/text_primary"
+                        android:inputType="text"
+                        android:background="@drawable/bg_input_field"
+                        android:paddingHorizontal="14dp"
+                        android:textSize="16sp"
+                        android:layout_marginBottom="14dp" />
+
+                    <Button
+                        android:id="@+id/connectCableButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="50dp"
+                        android:text="@string/str_connect_cable"
+                        android:textColor="@color/text_primary"
+                        android:fontFamily="sans-serif-medium"
+                        android:background="@drawable/bg_btn_warning"
+                        android:stateListAnimator="@null"
+                        android:layout_marginBottom="6dp" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/str_cable_note"
+                        android:textColor="@color/text_tertiary"
+                        android:textSize="11sp"
+                        android:gravity="center"
+                        android:layout_marginBottom="4dp" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+        </ScrollView>
+
+        <TextView
+            android:id="@+id/statusText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp"
+            android:gravity="center"
+            android:layout_marginTop="10dp" />
+
+    </LinearLayout>
+
+    <!-- Panel de control -->
+    <LinearLayout
+        android:id="@+id/controlPanel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:background="@drawable/bg_card_control"
+        android:focusable="false"
+        android:focusableInTouchMode="false"
+        android:elevation="16dp"
+        android:visibility="gone">
+
+        <!-- Zona de agarre (grabber): área táctil ampliada dedicada
+             exclusivamente al gesto de deslizar para ocultar/mostrar el
+             panel. El resto del panel (switches, radios, scroll) queda
+             excluido del gesto de swipe, ver MainActivity.isInsideSwipeExclusionZone(). -->
+        <FrameLayout
+            android:id="@+id/controlPanelGrabberZone"
+            android:layout_width="match_parent"
+            android:layout_height="28dp"
+            android:focusable="false">
+
+            <View
+                android:layout_width="36dp"
+                android:layout_height="4dp"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/bg_grabber" />
+
+        </FrameLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="20dp"
+            android:paddingTop="14dp"
+            android:paddingBottom="10dp"
+            android:focusable="false">
+
+            <TextView
+                android:text="@string/str_app_title"
+                android:textColor="@color/text_primary"
+                android:textSize="16sp"
+                android:fontFamily="sans-serif-medium"
+                android:textStyle="bold"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_weight="1" />
+
+            <TextView
+                android:id="@+id/connectionTypeBadge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/str_tab_wifi"
+                android:textColor="@color/text_primary"
+                android:textSize="11sp"
+                android:fontFamily="sans-serif-medium"
+                android:background="@drawable/bg_badge_pill"
+                android:paddingHorizontal="10dp"
+                android:paddingVertical="4dp"
+                android:layout_marginEnd="10dp" />
+
+            <TextView
+                android:id="@+id/controlStatusText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/str_connected"
+                android:textColor="@color/accent_green"
+                android:fontFamily="sans-serif-medium"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <ScrollView
+            android:id="@+id/controlScrollView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:maxHeight="280dp"
+            android:paddingHorizontal="20dp"
+            android:fadeScrollbars="false">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingBottom="16dp">
+
+                <TextView
+                    android:id="@+id/gamepadStatusText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/str_gamepad_none"
+                    android:textColor="@color/text_tertiary"
+                    android:textSize="11sp"
+                    android:layout_marginBottom="12dp" />
+
+                <!-- Tracking principal -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="@drawable/bg_row_card"
+                    android:padding="4dp"
+                    android:layout_marginBottom="14dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="50dp"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:paddingHorizontal="12dp"
+                        android:focusable="false">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/str_hmd_tracking"
+                            android:textColor="@color/text_primary"
+                            android:fontFamily="sans-serif-medium"
+                            android:textSize="14sp" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/str_gyroscope"
+                            android:textColor="@color/text_tertiary"
+                            android:textSize="11sp"
+                            android:layout_marginEnd="10dp" />
+
+                        <Switch
+                            android:id="@+id/switchHmd"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:checked="false"
+                            android:thumbTint="@color/text_primary"
+                            android:trackTint="@color/accent_indigo" />
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginHorizontal="12dp"
+                        android:background="@color/stroke_soft_2" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="50dp"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:paddingHorizontal="12dp"
+                        android:focusable="false">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/str_hand_tracking"
+                            android:textColor="@color/text_primary"
+                            android:fontFamily="sans-serif-medium"
+                            android:textSize="14sp" />
+
+                        <Switch
+                            android:id="@+id/switchHand"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:checked="false"
+                            android:thumbTint="@color/text_primary"
+                            android:trackTint="@color/accent_indigo" />
+                    </LinearLayout>
+
+                    <!-- Sub-panel de Hand tracking: SOLO visible cuando switchHand
+                         está activado. Contiene el modo de tracking de manos
+                         (Manos / LED azul / LED verde / Manos+Joycons) y el
+                         switch de vista de cámara + esqueleto. Se
+                         muestra/oculta en MainActivity (switchHand listener). -->
+                    <LinearLayout
+                        android:id="@+id/handTrackingSubPanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:paddingHorizontal="12dp"
+                        android:paddingBottom="10dp"
+                        android:visibility="gone">
+
+                        <TextView
+                            android:text="@string/str_tracking_mode_title"
+                            android:textColor="@color/text_label"
+                            android:textSize="11sp"
+                            android:fontFamily="sans-serif-medium"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:layout_marginBottom="8dp" />
+
+                        <RadioGroup
+                            android:id="@+id/trackingModeGroup"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:focusable="false"
+                            android:background="@drawable/bg_tabs_container"
+                            android:padding="8dp"
+                            android:layout_marginBottom="10dp">
+
+                            <RadioButton
+                                android:id="@+id/modeNone"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="@string/str_mode_none"
+                                android:textColor="@color/text_primary"
+                                android:textSize="10sp"
+                                android:buttonTint="@color/accent_indigo"
+                                android:checked="true" />
+
+                            <RadioButton
+                                android:id="@+id/modeHand"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="@string/str_mode_hand"
+                                android:textColor="@color/text_primary"
+                                android:textSize="10sp"
+                                android:buttonTint="@color/accent_indigo" />
+
+                            <RadioButton
+                                android:id="@+id/modeLedBlue"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="@string/str_mode_led_blue"
+                                android:textColor="@color/text_primary"
+                                android:textSize="10sp"
+                                android:buttonTint="@color/accent_indigo" />
+
+                            <RadioButton
+                                android:id="@+id/modeLedGreen"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="@string/str_mode_led_green"
+                                android:textColor="@color/text_primary"
+                                android:textSize="10sp"
+                                android:buttonTint="@color/accent_indigo" />
+
+                            <RadioButton
+                                android:id="@+id/modeHandJoycons"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="@string/str_mode_hand_joycons"
+                                android:textColor="@color/text_primary"
+                                android:textSize="10sp"
+                                android:buttonTint="@color/accent_indigo" />
+
+                        </RadioGroup>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="46dp"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical"
+                            android:background="@drawable/bg_tabs_container"
+                            android:paddingHorizontal="10dp"
+                            android:focusable="false">
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="@string/str_camera_skeleton"
+                                android:textColor="@color/text_primary"
+                                android:fontFamily="sans-serif-medium"
+                                android:textSize="13sp" />
+
+                            <Switch
+                                android:id="@+id/switchCameraOverlay"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:checked="false"
+                                android:thumbTint="@color/text_primary"
+                                android:trackTint="@color/accent_indigo" />
+
+                        </LinearLayout>
+
+                    </LinearLayout>
+
+                    <!-- 6DoF (posición real vía ARCore) -->
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginHorizontal="12dp"
+                        android:background="@color/stroke_soft_2" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="50dp"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:paddingHorizontal="12dp"
+                        android:focusable="false">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/str_sixdof_tracking"
+                            android:textColor="@color/text_primary"
+                            android:fontFamily="sans-serif-medium"
+                            android:textSize="14sp" />
+
+                        <Switch
+                            android:id="@+id/switchSixDof"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:checked="false"
+                            android:thumbTint="@color/text_primary"
+                            android:trackTint="@color/accent_indigo" />
+                    </LinearLayout>
+
+                    <!-- Sub-panel de 6DoF: SOLO visible cuando switchSixDof
+                         está activado. Contiene el submodo (Plano / LEDs /
+                         Manos / Manos+Joycons). Se muestra/oculta en
+                         MainActivity (switchSixDof listener). -->
+                    <LinearLayout
+                        android:id="@+id/sixDofSubPanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:paddingHorizontal="12dp"
+                        android:paddingBottom="10dp"
+                        android:visibility="gone">
+
+                        <TextView
+                            android:text="@string/str_sixdof_mode_title"
+                            android:textColor="@color/text_label"
+                            android:textSize="11sp"
+                            android:fontFamily="sans-serif-medium"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:layout_marginBottom="8dp" />
+
+                        <RadioGroup
+                            android:id="@+id/sixDofModeGroup"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:focusable="false"
+                            android:background="@drawable/bg_tabs_container"
+                            android:padding="8dp">
+
+                            <RadioButton
+                                android:id="@+id/sixDofModePlain"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="@string/str_sixdof_plain"
+                                android:textColor="@color/text_primary"
+                                android:textSize="10sp"
+                                android:buttonTint="@color/accent_indigo"
+                                android:checked="true" />
+
+                            <RadioButton
+                                android:id="@+id/sixDofModeLeds"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="@string/str_sixdof_leds"
+                                android:textColor="@color/text_primary"
+                                android:textSize="10sp"
+                                android:buttonTint="@color/accent_indigo" />
+
+                            <RadioButton
+                                android:id="@+id/sixDofModeHandTracking"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="@string/str_sixdof_handtracking"
+                                android:textColor="@color/text_primary"
+                                android:textSize="10sp"
+                                android:buttonTint="@color/accent_indigo" />
+
+                            <RadioButton
+                                android:id="@+id/sixDofModeHandJoycons"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="@string/str_sixdof_handjoycons"
+                                android:textColor="@color/text_primary"
+                                android:textSize="10sp"
+                                android:buttonTint="@color/accent_indigo" />
+
+                        </RadioGroup>
+
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/sixDofStatusText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text=""
+                        android:textColor="@color/text_tertiary"
+                        android:textSize="10sp"
+                        android:paddingHorizontal="12dp"
+                        android:paddingBottom="8dp" />
+
+                </LinearLayout>
+
+                <!-- Sensibilidad de movimiento 6DoF: siempre visible, justo
+                     debajo de los switches de tracking (HMD / Manos / 6DoF) -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:focusable="false"
+                    android:background="@drawable/bg_row_card"
+                    android:paddingHorizontal="12dp"
+                    android:layout_marginBottom="16dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_height="wrap_content"
+                        android:text="@string/str_sensitivity"
+                        android:textColor="@color/text_primary"
+                        android:fontFamily="sans-serif-medium"
+                        android:textSize="13sp" />
+
+                    <Button
+                        android:id="@+id/sensDownButton"
+                        android:layout_width="34dp"
+                        android:layout_height="34dp"
+                        android:text="−"
+                        android:textSize="15sp"
+                        android:textColor="@color/text_primary"
+                        android:background="@drawable/bg_btn_stepper"
+                        android:stateListAnimator="@null" />
+
+                    <TextView
+                        android:id="@+id/sensLabelText"
+                        android:layout_width="76dp"
+                        android:layout_height="wrap_content"
+                        android:gravity="center"
+                        android:text="1.0×"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp" />
+
+                    <Button
+                        android:id="@+id/sensUpButton"
+                        android:layout_width="34dp"
+                        android:layout_height="34dp"
+                        android:text="+"
+                        android:textSize="15sp"
+                        android:textColor="@color/text_primary"
+                        android:background="@drawable/bg_btn_stepper"
+                        android:stateListAnimator="@null" />
+
+                </LinearLayout>
+
+                <!-- Ver stream SteamVR en pantalla: junto a sensibilidad,
+                     debajo de los tipos de tracking -->
+                <Button
+                    android:id="@+id/streamButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="50dp"
+                    android:text="@string/str_view_steamvr"
+                    android:textColor="@color/text_primary"
+                    android:fontFamily="sans-serif-medium"
+                    android:textSize="13sp"
+                    android:background="@drawable/bg_btn_violet"
+                    android:stateListAnimator="@null"
+                    android:layout_marginBottom="14dp" />
+
+                <!-- Eye tracking VRChat -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="@drawable/bg_row_card"
+                    android:padding="4dp"
+                    android:layout_marginBottom="14dp">
+
+                    <!-- Eye tracking VRChat -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="50dp"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:paddingHorizontal="12dp"
+                        android:focusable="false">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/str_eye_tracking"
+                            android:textColor="@color/text_primary"
+                            android:fontFamily="sans-serif-medium"
+                            android:textSize="14sp" />
+
+                        <Switch
+                            android:id="@+id/switchEyeTracking"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:checked="false"
+                            android:thumbTint="@color/text_primary"
+                            android:trackTint="@color/accent_indigo" />
+
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/eyeTrackingStatusText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/str_eye_tracking_status"
+                        android:textColor="@color/text_tertiary"
+                        android:textSize="10sp"
+                        android:paddingHorizontal="12dp"
+                        android:paddingBottom="8dp" />
+
+                </LinearLayout>
+
+                <Button
+                    android:id="@+id/recenterButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="50dp"
+                    android:text="@string/str_recenter"
+                    android:textColor="@color/text_primary"
+                    android:fontFamily="sans-serif-medium"
+                    android:textSize="13sp"
+                    android:background="@drawable/bg_btn_success"
+                    android:stateListAnimator="@null" />
+
+            </LinearLayout>
+        </ScrollView>
+
+    </LinearLayout>
+
+    <!-- Overlay: reproductor de video tutorial -->
+    <FrameLayout
+        android:id="@+id/tutorialOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#FF000000"
+        android:visibility="gone"
+        android:elevation="24dp"
+        android:focusable="false"
+        android:focusableInTouchMode="false">
+
+        <VideoView
+            android:id="@+id/tutorialVideoView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <Button
+            android:id="@+id/skipTutorialButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|end"
+            android:layout_margin="14dp"
+            android:text="@string/str_close"
+            android:textColor="@color/text_primary"
+            android:textSize="12sp"
+            android:fontFamily="sans-serif-medium"
+            android:background="@drawable/bg_btn_ghost"
+            android:stateListAnimator="@null"
+            android:paddingHorizontal="18dp"
+            android:paddingVertical="10dp" />
+
+    </FrameLayout>
+
+</FrameLayout>

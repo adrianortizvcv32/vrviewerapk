@@ -1,0 +1,3 @@
+-keep class com.google.mediapipe.** { *; }
+-keep class androidx.media3.** { *; }
+-dontwarn com.google.mediapipe.**
