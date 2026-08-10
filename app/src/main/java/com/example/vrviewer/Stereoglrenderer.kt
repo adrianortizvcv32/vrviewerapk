@@ -36,13 +36,7 @@ class StereoGLRenderer(
     private var uSepLoc = 0
     private var uZoomLoc = 0
 
-    // ── Ventana flotante del Menú Hub ──
-    // NOTA: windowX/Y/HalfW/HalfH/Parallax ya vienen calculados por
-    // HubWindowController, proyectando un ancla FIJA del mundo ARCore con
-    // la pose real de cámara de cada frame (ver setWindowScreenRect). El
-    // renderer ya no calcula perspectiva ni paralaje por sí mismo: solo
-    // aplica lo que le llega, para que la ventana se vea "clavada" en el
-    // cuarto en vez de pegada a la pantalla como un HUD.
+
     private var windowTextureId = 0
     private var uWindowTexLoc = 0
     private var uWinVisibleLoc = 0
@@ -52,10 +46,7 @@ class StereoGLRenderer(
     private var uWinHalfHLoc = 0
     private var uWinParallaxLoc = 0
 
-    // ── Fix tearing (ver nota en HubBrowserView): además del bitmap
-    // pendiente, ahora guardamos el callback que hay que invocar apenas
-    // texImage2D termine de subirlo, para que HubBrowserView sepa que ya
-    // puede reusar ese buffer sin arriesgar pisar un frame a medio subir. ──
+
     @Volatile private var pendingWindowBitmap: Bitmap? = null
     @Volatile private var pendingWindowRelease: (() -> Unit)? = null
     @Volatile private var windowBitmapDirty = false
@@ -68,7 +59,7 @@ class StereoGLRenderer(
     @Volatile private var windowHalfH = BASE_HALF_H
     @Volatile private var windowParallax = 0.05f
 
-    // ── Cámara del Menú Hub (textura GL independiente, nunca toca glInputSurface) ──
+
     private var hubCamTextureId = 0
     private var uHubCamTexLoc = 0
     private var uHubCamActiveLoc = 0
@@ -91,7 +82,7 @@ class StereoGLRenderer(
     companion object {
 
         private const val BASE_HALF_W = 0.34f
-        private const val BASE_HALF_H = 0.2125f   // antes 0.20f — ver nota de aspect ratio arriba
+        private const val BASE_HALF_H = 0.2125f  
 
         private const val VERTEX_SHADER = """
             attribute vec2 aPosition;
