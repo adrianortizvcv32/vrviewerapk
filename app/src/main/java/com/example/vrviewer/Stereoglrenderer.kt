@@ -89,15 +89,7 @@ class StereoGLRenderer(
     private lateinit var vertexBuffer: FloatBuffer
 
     companion object {
-        // FIX aspect ratio (ventana Menú Hub estirada): el WebView interno
-        // de HubBrowserView es 800x500 px (relación 1.6). Estos valores
-        // deben mantener esa misma relación (0.34 / 1.6 = 0.2125), o el
-        // fragment shader — que mapea el bitmap completo (UV 0..1) al
-        // rectángulo del frame sin preservar aspecto — estira la página.
-        // Deben coincidir con baseHalfWidthM/baseHalfHeightM de
-        // HubWindowController.kt (usados por defecto hasta el primer
-        // update() del controller, o sea el par de segundos mientras
-        // arranca ARCore/MediaPipe con windowVisible=true).
+
         private const val BASE_HALF_W = 0.34f
         private const val BASE_HALF_H = 0.2125f   // antes 0.20f — ver nota de aspect ratio arriba
 
@@ -110,19 +102,7 @@ class StereoGLRenderer(
             }
         """
 
-        // FIX esquinas recortadas de la ventana Hub (bordes en forma de
-        // "sonrisa" cuando la ventana queda cerca del borde del FOV):
-        // antes, el bloque 1.5 (ventana Hub) se evaluaba DESPUÉS del
-        // discard/recorte por distorsión de barril (bloque 1). Como ese
-        // discard usa el óvalo de FOV pensado para el passthrough de
-        // cámara (algo que sí pasa por óptica real), cualquier fragmento
-        // de la ventana que cayera fuera de ese óvalo se pintaba negro
-        // ANTES de que el bloque de la ventana tuviera oportunidad de
-        // dibujarlo — la ventana es UI plana, no pasa por óptica, y no
-        // debería estar sujeta a ese recorte. Ahora el bloque de la
-        // ventana Hub se evalúa PRIMERO (con su propio return), así sus
-        // bordes quedan siempre rectos sin importar dónde esté posicionada
-        // respecto al óvalo de recorte del passthrough.
+
         private const val FRAGMENT_SHADER = """
     #extension GL_OES_EGL_image_external : require
     precision mediump float;
