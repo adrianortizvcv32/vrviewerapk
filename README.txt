@@ -1,3 +1,5 @@
+<p align="center"> <img src="app/src/main/ic_launcher-playstore.png" width="180" alt="AndroidVRViewer icon" /> </p>
+
 # AndroidVRViewer — Instrucciones
 ## PASO 1: Descargar modelo MediaPipe (OBLIGATORIO)
 Descarga este archivo (~30MB):
