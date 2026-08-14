@@ -136,24 +136,27 @@ class HandTrackerWithOverlay(
                 return floatArrayOf(
                     mapRange(lm.x(), 0f, 1f, xLo, xHi),
                     mapRange(lm.y(), 1f, 0f, yLo, yHi),
-                    lm.z() * zScale
+                    -lm.z() * zScale
                 )
             }
 
             val p0  = lmVR(0); val p9  = lmVR(9)
             val p5  = lmVR(5); val p17 = lmVR(17)
 
-            val fwd        = normalize3(p9[0]-p0[0], p9[1]-p0[1], p9[2]-p0[2])
-            val palmAcross = normalize3(p5[0]-p17[0], p5[1]-p17[1], p5[2]-p17[2])
-            val upRaw      = cross3(fwd, palmAcross)
-            val up         = normalize3(upRaw[0], upRaw[1], upRaw[2])
-            val sideRaw    = cross3(up, fwd)
-            val side       = normalize3(sideRaw[0], sideRaw[1], sideRaw[2])
-
             val isRight  = label == "Right"
-            val signSide = if (isRight) 1f else -1f
 
-            val sideAxis = floatArrayOf(side[0]*signSide, side[1]*signSide, side[2]*signSide)
+            val fwd  = normalize3(p9[0]-p0[0], p9[1]-p0[1], p9[2]-p0[2])
+            val side = if (isRight)
+                normalize3(p5[0]-p17[0], p5[1]-p17[1], p5[2]-p17[2])
+            else
+                normalize3(p17[0]-p5[0], p17[1]-p5[1], p17[2]-p5[2])
+
+            val upRaw   = cross3(fwd, side)
+            val up      = normalize3(upRaw[0], upRaw[1], upRaw[2])
+            val sideRaw = cross3(fwd, up)
+            val sideN   = normalize3(sideRaw[0], sideRaw[1], sideRaw[2])
+
+            val sideAxis = sideN
             val upAxis   = up
             val fwdAxis  = floatArrayOf(-fwd[0], -fwd[1], -fwd[2])
 
