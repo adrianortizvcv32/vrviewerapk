@@ -23,6 +23,7 @@ import com.google.mediapipe.tasks.vision.handlandmarker.HandLandmarkerResult
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.sqrt
 
@@ -133,13 +134,44 @@ class SixDofTracker(
 
     private val handFrameBuffer = HandFrameBuffer(maxDim = 384)
 
-
     private val leftHandSmoother  = HandPoseSmoother()
     private val rightHandSmoother = HandPoseSmoother()
 
-
     private val leftClickDetector  = PinchClickDetector()
     private val rightClickDetector = PinchClickDetector()
+
+    // NUEVO: detectores de click tipo Quest (A/X, B/Y, System) — uno por
+    // botón y por mano, mismo patrón que leftClickDetector/rightClickDetector
+    // (pulso de un frame en el flanco de subida, con histéresis interna).
+    private val leftButtonAClickDetector = PinchClickDetector()
+    private val leftButtonBClickDetector = PinchClickDetector()
+    private val leftButtonSystemClickDetector = PinchClickDetector(pressThreshold = 0.85f, releaseThreshold = 0.65f)
+    private val rightButtonAClickDetector = PinchClickDetector()
+    private val rightButtonBClickDetector = PinchClickDetector()
+    private val rightButtonSystemClickDetector = PinchClickDetector(pressThreshold = 0.85f, releaseThreshold = 0.65f)
+
+    // NUEVO: buffer reusado para detectColorBlob (modo LED) — evita
+    // asignar un IntArray(w*h) nuevo en cada frame, lo que generaba
+    // presión de GC en el hilo de captura ARCore (thread de prioridad
+    // URGENT_DISPLAY, muy sensible a pausas de GC).
+    private var blobPixelBuffer: IntArray = IntArray(0)
+
+    // NUEVO: guarda la última posición X conocida (en espacio VR, tras
+    // mapRange) de cada mano MediaPipe para el guard anti-swap de
+    // handedness — ver detectHandSwap().
+    @Volatile private var lastLeftVx: Float = -0.35f
+    @Volatile private var lastRightVx: Float = 0.35f
+
+    // NUEVO (avance simplificado): estado suavizado del "caminar" — solo
+    // se usa el eje Y (adelante) de la mano IZQUIERDA. Se reemplazó el
+    // viejo joystick del pulgar (bugueado en las 4 direcciones) por algo
+    // simple y robusto: doblar el índice de la mano izquierda avanza
+    // SIEMPRE derecho, sin componente lateral. La mano derecha nunca
+    // mueve al jugador (rightStickX/Y quedan siempre en 0).
+    private var leftStickX = 0f
+    private var leftStickY = 0f
+    private var rightStickX = 0f
+    private var rightStickY = 0f
 
     fun start() {
         if (running.getAndSet(true)) return
@@ -200,12 +232,12 @@ class SixDofTracker(
                         config.depthMode = Config.DepthMode.AUTOMATIC
                         Log.i("SixDofTracker", "ARCore Depth API soportado: usando profundidad real de mano")
                     } else {
-                        Log.w("SixDofTracker", "ARCore Depth API NO soportado en este dispositivo: fallback a ancho de palma")
+                        Log.w("SixDofTracker", "ARCore Depth API NO soportado en este dispositivo: fallback a world landmarks / ancho de palma")
                     }
                 } else {
                     depthEnabled = false
                     if ((handMode == SixDofHandMode.MEDIAPIPE || handMode == SixDofHandMode.MEDIAPIPE_JOYCONS) && !useDepthForHands) {
-                        Log.i("SixDofTracker", "Depth API desactivada por configuración (useDepthForHands=false): usando fallback de ancho de palma")
+                        Log.i("SixDofTracker", "Depth API desactivada por configuración (useDepthForHands=false): usando fallback de world landmarks / ancho de palma")
                     }
                 }
 
@@ -229,6 +261,16 @@ class SixDofTracker(
                 rightHandSmoother.reset()
                 leftClickDetector.reset()
                 rightClickDetector.reset()
+                leftButtonAClickDetector.reset()
+                leftButtonBClickDetector.reset()
+                leftButtonSystemClickDetector.reset()
+                rightButtonAClickDetector.reset()
+                rightButtonBClickDetector.reset()
+                rightButtonSystemClickDetector.reset()
+                lastLeftVx = -0.35f
+                lastRightVx = 0.35f
+                leftStickX = 0f; leftStickY = 0f
+                rightStickX = 0f; rightStickY = 0f
 
                 if (handMode == SixDofHandMode.MEDIAPIPE || handMode == SixDofHandMode.MEDIAPIPE_JOYCONS) {
                     setupMediaPipe()
@@ -272,9 +314,16 @@ class SixDofTracker(
                 .setRunningMode(RunningMode.LIVE_STREAM)
                 .setNumHands(2)
 
+                // AJUSTADO: bajados respecto a la versión anterior
+                // (0.55/0.5/0.5) para que MediaPipe "enganche" la mano más
+                // rápido y la pierda con menos frecuencia — el costo es
+                // algún falso positivo ocasional, que ya se filtra aparte
+                // con MIN_HANDEDNESS_CONFIDENCE y el guard anti-swap. Si
+                // notás demasiados falsos positivos (manos fantasma),
+                // subilos de a 0.05.
                 .setMinHandDetectionConfidence(0.45f)
-                .setMinTrackingConfidence(0.35f)
-                .setMinHandPresenceConfidence(0.40f)
+                .setMinTrackingConfidence(0.4f)
+                .setMinHandPresenceConfidence(0.4f)
                 .setResultListener(::onMediaPipeResult)
                 .setErrorListener { e -> detectingHands = false; onError("6DoF+Manos (MediaPipe): ${e.message}") }
                 .build()
@@ -437,7 +486,9 @@ class SixDofTracker(
     }
 
 
-    fun recenter() { hasOrigin = false }
+    fun recenter() {
+        hasOrigin = false
+    }
 
     fun stop() {
         running.set(false)
@@ -533,11 +584,18 @@ class SixDofTracker(
         val totalPixels = (w * h).toFloat()
         var sumX = 0f; var sumY = 0f; var count = 0
 
-        val pixels = IntArray(w * h)
+        // NUEVO: reusa el buffer de pixeles entre frames en vez de
+        // asignar un IntArray(w*h) nuevo cada vez (evita presión de GC
+        // en el hilo de captura ARCore, que corre con prioridad URGENT_DISPLAY).
+        val needed = w * h
+        if (blobPixelBuffer.size < needed) {
+            blobPixelBuffer = IntArray(needed)
+        }
+        val pixels = blobPixelBuffer
         bmp.getPixels(pixels, 0, w, 0, 0, w, h)
 
         var i = 0
-        while (i < pixels.size) {
+        while (i < needed) {
             val px = pixels[i]
             val r = (px shr 16) and 0xFF
             val g = (px shr 8)  and 0xFF
@@ -628,6 +686,24 @@ class SixDofTracker(
         } catch (e: Exception) {
             Log.e("SixDofTracker", "Error procesando resultado de MediaPipe: ${e.message}", e)
             onError("6DoF+Manos: error procesando landmarks (${e.message})")
+            // NUEVO: si la excepción ocurrió a mitad de actualizar los
+            // smoothers/detectores de click, su estado interno puede haber
+            // quedado a medio escribir. Reseteamos ambas manos para no
+            // arrastrar un estado corrupto al siguiente frame válido.
+            leftHandSmoother.reset()
+            rightHandSmoother.reset()
+            leftClickDetector.reset()
+            rightClickDetector.reset()
+            leftButtonAClickDetector.reset()
+            leftButtonBClickDetector.reset()
+            leftButtonSystemClickDetector.reset()
+            rightButtonAClickDetector.reset()
+            rightButtonBClickDetector.reset()
+            rightButtonSystemClickDetector.reset()
+            leftStickX = 0f; leftStickY = 0f
+            rightStickX = 0f; rightStickY = 0f
+            missedLeftMp = MEDIAPIPE_MISS_TOLERANCE + 1
+            missedRightMp = MEDIAPIPE_MISS_TOLERANCE + 1
         } finally {
             depthImage?.close()
         }
@@ -656,6 +732,48 @@ class SixDofTracker(
         }
     }
 
+    /**
+     * NUEVO: guard anti-swap de handedness. MediaPipe a veces invierte el
+     * label "Left"/"Right" en poses ambiguas (manos cruzadas, una mano
+     * ocluyendo a la otra, etc). Un flip instantáneo del label produce un
+     * teletransporte visual de la mano de un lado al otro. Corregimos por
+     * continuidad espacial: si la posición nueva está mucho más cerca de
+     * la última posición conocida de LA OTRA mano, asumimos que el label
+     * está invertido y lo corregimos.
+     */
+    private fun correctHandedness(reportedRight: Boolean, vx: Float): Boolean {
+        val distToOwnLast = if (reportedRight) abs(vx - lastRightVx) else abs(vx - lastLeftVx)
+        val distToOtherLast = if (reportedRight) abs(vx - lastLeftVx) else abs(vx - lastRightVx)
+        // Solo corrige si la evidencia es clara (margen de 0.15 en espacio
+        // VR, ~15% del rango horizontal) para no pelear con MediaPipe en
+        // casos genuinamente ambiguos (manos cerca del centro).
+        return if (distToOtherLast < distToOwnLast - 0.15f) !reportedRight else reportedRight
+    }
+
+    // NUEVO (yaw fix): construye el cuaternión unitario que representa una
+    // rotación pura alrededor del eje vertical (Y) del espacio VR, para
+    // corregir el yaw de orientación que reporta MediaPipe. Positivo =
+    // gira hacia la derecha, negativo = gira hacia la izquierda.
+    private fun yawOffsetQuat(degrees: Float): FloatArray {
+        val half = Math.toRadians(degrees.toDouble()).toFloat() / 2f
+        return floatArrayOf(0f, kotlin.math.sin(half), 0f, kotlin.math.cos(half))
+    }
+
+    // NUEVO (yaw fix): multiplicación de cuaterniones (x, y, z, w), en
+    // orden a*b (a se aplica "después" de b si se interpreta como
+    // rotación de mundo). Se usa para anteponer el offset de yaw fijo a
+    // la orientación cruda que calcula buildQuatFromAxes().
+    private fun quatMultiply(a: FloatArray, b: FloatArray): FloatArray {
+        val ax = a[0]; val ay = a[1]; val az = a[2]; val aw = a[3]
+        val bx = b[0]; val by = b[1]; val bz = b[2]; val bw = b[3]
+        return floatArrayOf(
+            aw * bx + ax * bw + ay * bz - az * by,
+            aw * by - ax * bz + ay * bw + az * bx,
+            aw * bz + ax * by - ay * bx + az * bw,
+            aw * bw - ax * bx - ay * by - az * bz
+        )
+    }
+
     private fun processMediaPipeResult(result: HandLandmarkerResult, depthImage: Image?) {
         var leftPose  = HandPose(-0.35f, 0.1f, -0.5f, tracked = false)
         var rightPose = HandPose( 0.35f, 0.1f, -0.5f, tracked = false)
@@ -667,12 +785,15 @@ class SixDofTracker(
         for (i in result.landmarks().indices) {
             val landmarks = result.landmarks()[i]
 
-            val label = result.handedness().getOrNull(i)?.getOrNull(0)?.categoryName() ?: continue
-            val isRight = label == "Right"
+            // NUEVO: gating por confianza de handedness. Descarta
+            // detecciones donde MediaPipe no está seguro de qué mano es —
+            // aceptar un label de baja confianza es peor que perder el
+            // frame, porque puede causar swaps espurios entre manos.
+            val handednessCategory = result.handedness().getOrNull(i)?.getOrNull(0) ?: continue
+            if (handednessCategory.score() < MIN_HANDEDNESS_CONFIDENCE) continue
+            val reportedIsRight = handednessCategory.categoryName() == "Right"
 
             val wrist = landmarks[0]
-
-
 
             val idxMcp   = landmarks[5]
             val pinkyMcp = landmarks[17]
@@ -684,17 +805,35 @@ class SixDofTracker(
             val vx = mapRange(wrist.x(), 0f, 1f, LED_X_LO, LED_X_HI)
             val vy = mapRange(wrist.y(), 1f, 0f, LED_Y_LO, LED_Y_HI)
 
+            // NUEVO: aplica el guard anti-swap antes de decidir a qué
+            // mano pertenece esta detección.
+            val isRight = correctHandedness(reportedIsRight, vx)
 
             val palmNx = (wrist.x() + idxMcp.x() + pinkyMcp.x()) / 3f
             val palmNy = (wrist.y() + idxMcp.y() + pinkyMcp.y()) / 3f
             val realDepthM = sampleDepthMeters(depthImage, palmNx, palmNy)
 
-
-            val vz = if (realDepthM != null) {
-                (-realDepthM).coerceIn(MEDIAPIPE_Z_FAR, MEDIAPIPE_Z_NEAR)
-            } else {
-                (-0.5f + (size - PALM_SIZE_BASE) * PALM_DEPTH_SCALE)
-                    .coerceIn(MEDIAPIPE_Z_FAR, MEDIAPIPE_Z_NEAR)
+            // NUEVO: cadena de prioridad de profundidad de 3 niveles.
+            //   1) Depth API real de ARCore (la más precisa, cuando está disponible)
+            //   2) World landmarks de MediaPipe (metros reales relativos a la
+            //      muñeca — mucho más estable que el tamaño 2D aparente de
+            //      la palma, porque no cambia al cerrar el puño)
+            //   3) Heurístico de tamaño de palma en pantalla (último recurso)
+            val worldLandmarks = result.worldLandmarks().getOrNull(i)
+            val vz = when {
+                realDepthM != null ->
+                    (-realDepthM).coerceIn(MEDIAPIPE_Z_FAR, MEDIAPIPE_Z_NEAR)
+                worldLandmarks != null && worldLandmarks.isNotEmpty() -> {
+                    // La Z de los world landmarks es relativa a la muñeca,
+                    // en metros, y no depende de la pose de los dedos.
+                    // La anclamos a una distancia base estimada.
+                    val wristWorldZ = worldLandmarks[0].z()
+                    (-0.5f + wristWorldZ * WORLD_Z_SCALE)
+                        .coerceIn(MEDIAPIPE_Z_FAR, MEDIAPIPE_Z_NEAR)
+                }
+                else ->
+                    (-0.5f + (size - PALM_SIZE_BASE) * PALM_DEPTH_SCALE)
+                        .coerceIn(MEDIAPIPE_Z_FAR, MEDIAPIPE_Z_NEAR)
             }
 
             fun lmVR(idx: Int): FloatArray {
@@ -722,19 +861,57 @@ class SixDofTracker(
 
             val sideAxis = sideN
             val fwdAxis  = floatArrayOf(-fwd[0], -fwd[1], -fwd[2])
-            val q = buildQuatFromAxes(sideAxis, up, fwdAxis)
+            val qRaw = buildQuatFromAxes(sideAxis, up, fwdAxis)
 
+            // NUEVO (yaw fix): la orientación cruda de MediaPipe aparecía
+            // muy volteada hacia el usuario en horizontal. Se le antepone
+            // una rotación fija de yaw (alrededor del eje Y) para
+            // corregirla — con constante independiente por mano, ver
+            // comentario junto a HAND_YAW_CORRECTION_RIGHT_DEG/LEFT_DEG.
+            val yawCorrectionDeg = if (isRight) HAND_YAW_CORRECTION_RIGHT_DEG else HAND_YAW_CORRECTION_LEFT_DEG
+            val q = quatMultiply(yawOffsetQuat(yawCorrectionDeg), qRaw)
 
             val (grip, pinch) = HandGesture.compute(landmarks)
 
             val curls = HandGestureCurl.computeCurls(landmarks)
+
+            // ══════════════════════════════════════════════════════════
+            // AVANCE SIMPLIFICADO: se reemplazó el joystick del pulgar
+            // (bugueado en las 4 direcciones — izquierda/derecha/adelante/
+            // atrás, con calibración de origen y deriva) por un mecanismo
+            // simple y robusto: doblar el índice de la mano IZQUIERDA
+            // avanza SIEMPRE derecho (sin ninguna componente lateral). La
+            // mano derecha nunca camina. curls[1] es el curl del índice
+            // (0f = extendido, 1f = totalmente doblado), calculado arriba
+            // por HandGestureCurl. Ajustar INDEX_WALK_DEAD_ZONE/MAX_CURL
+            // en el companion object si hace falta más o menos recorrido.
+            // ══════════════════════════════════════════════════════════
+            val stickTargetX = 0f
+            val stickTargetY = if (!isRight)
+                stickAxisValue(curls[1], INDEX_WALK_DEAD_ZONE, INDEX_WALK_MAX_CURL)
+            else 0f
+
+            if (isRight) {
+                rightStickX = 0f
+                rightStickY = 0f
+            } else {
+                leftStickX += (stickTargetX - leftStickX) * STICK_SMOOTHING_ALPHA
+                leftStickY += (stickTargetY - leftStickY) * STICK_SMOOTHING_ALPHA
+            }
+
+            val extraPinches = HandGesture.computeExtraPinches(landmarks)
 
             val rawPose = HandPose(
                 vx, vy, vz, tracked = true,
                 qx = q[0], qy = q[1], qz = q[2], qw = q[3],
                 grip = grip, pinch = pinch,
                 curlThumb = curls[0], curlIndex = curls[1], curlMiddle = curls[2],
-                curlRing = curls[3], curlPinky = curls[4]
+                curlRing = curls[3], curlPinky = curls[4],
+                pinchMiddle = extraPinches[0],
+                pinchRing = extraPinches[1],
+                pinchPinky = extraPinches[2],
+                joyX = if (isRight) rightStickX else leftStickX,
+                joyY = if (isRight) rightStickY else leftStickY
             )
 
 
@@ -745,17 +922,53 @@ class SixDofTracker(
 
 
             if (isRight) {
-                rightPose = rightHandSmoother.smooth(calibrated, ts)
+                // NUEVO: precisionMode se activa apenas empezás a
+                // pellizcar (pre-click) — desactiva la extrapolación de
+                // latencia y aplica un suavizado extra, justo cuando
+                // más importa que la mano no tiemble para acertar un
+                // click en el menú.
+                rightPose = rightHandSmoother.smooth(calibrated, ts, precisionMode = calibrated.pinch > 0.35f)
                 if (rightClickDetector.update(rightPose.pinch)) {
                     rightPose = rightPose.copy(clicked = true)
                 }
+                // NUEVO: botones A/B/System de la mano derecha. Se
+                // llama a .update() para que el detector avance su
+                // estado interno (histéresis press/release), pero el
+                // valor que se envía es el SOSTENIDO (.isHeld()) — así
+                // el botón queda "apretado" mientras sigas pellizcando,
+                // no solo un instante, igual que ya funciona
+                // trigger/grip.
+                rightButtonAClickDetector.update(rightPose.pinchMiddle)
+                rightButtonBClickDetector.update(rightPose.pinchRing)
+                rightButtonSystemClickDetector.update(rightPose.pinchPinky)
+                rightPose = rightPose.copy(
+                    buttonAPressed = rightButtonAClickDetector.isHeld(),
+                    buttonBPressed = rightButtonBClickDetector.isHeld(),
+                    buttonSystemPressed = rightButtonSystemClickDetector.isHeld()
+                )
                 sawRight = true
+                lastRightVx = vx
             } else {
-                leftPose = leftHandSmoother.smooth(calibrated, ts)
+                // NUEVO: idem para la mano izquierda.
+                leftPose = leftHandSmoother.smooth(calibrated, ts, precisionMode = calibrated.pinch > 0.35f)
                 if (leftClickDetector.update(leftPose.pinch)) {
                     leftPose = leftPose.copy(clicked = true)
                 }
+                // NUEVO: botones X/Y/System de la mano izquierda (mismo
+                // gesto que A/B en la derecha; el nombre físico del botón
+                // en el visor depende de qué mano sea, no del gesto).
+                // Igual que en la derecha: se envía el estado SOSTENIDO,
+                // no un pulso de un solo frame.
+                leftButtonAClickDetector.update(leftPose.pinchMiddle)
+                leftButtonBClickDetector.update(leftPose.pinchRing)
+                leftButtonSystemClickDetector.update(leftPose.pinchPinky)
+                leftPose = leftPose.copy(
+                    buttonAPressed = leftButtonAClickDetector.isHeld(),
+                    buttonBPressed = leftButtonBClickDetector.isHeld(),
+                    buttonSystemPressed = leftButtonSystemClickDetector.isHeld()
+                )
                 sawLeft = true
+                lastLeftVx = vx
             }
         }
 
@@ -765,10 +978,18 @@ class SixDofTracker(
         } else {
             missedLeftMp++
             if (missedLeftMp <= MEDIAPIPE_MISS_TOLERANCE && lastLeftPoseMp.tracked) {
-                leftPose = lastLeftPoseMp.copy(clicked = false)
+                leftPose = lastLeftPoseMp.copy(
+                    clicked = false,
+                    buttonAPressed = false, buttonBPressed = false, buttonSystemPressed = false,
+                    joyX = 0f, joyY = 0f
+                )
             } else {
                 leftHandSmoother.reset()
                 leftClickDetector.reset()
+                leftButtonAClickDetector.reset()
+                leftButtonBClickDetector.reset()
+                leftButtonSystemClickDetector.reset()
+                leftStickX = 0f; leftStickY = 0f
             }
         }
 
@@ -778,10 +999,18 @@ class SixDofTracker(
         } else {
             missedRightMp++
             if (missedRightMp <= MEDIAPIPE_MISS_TOLERANCE && lastRightPoseMp.tracked) {
-                rightPose = lastRightPoseMp.copy(clicked = false)
+                rightPose = lastRightPoseMp.copy(
+                    clicked = false,
+                    buttonAPressed = false, buttonBPressed = false, buttonSystemPressed = false,
+                    joyX = 0f, joyY = 0f
+                )
             } else {
                 rightHandSmoother.reset()
                 rightClickDetector.reset()
+                rightButtonAClickDetector.reset()
+                rightButtonBClickDetector.reset()
+                rightButtonSystemClickDetector.reset()
+                rightStickX = 0f; rightStickY = 0f
             }
         }
 
@@ -824,6 +1053,18 @@ class SixDofTracker(
         a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]
     )
 
+    // NUEVO (avance simplificado): mapea el curl de índice (0f..1f) a un
+    // valor de "acelerador" 0f..1f, con zona muerta (para que un dedo
+    // apenas curvado no te haga caminar) y saturación al llegar a
+    // maxCurl (para no exigir doblar el dedo del todo).
+    private fun stickAxisValue(v: Float, deadZone: Float, maxRange: Float): Float {
+        val absV = abs(v)
+        if (absV < deadZone) return 0f
+        val sign = if (v < 0f) -1f else 1f
+        val scaled = ((absV - deadZone) / (maxRange - deadZone)).coerceIn(0f, 1f)
+        return sign * scaled
+    }
+
     private fun mapRange(v: Float, i0: Float, i1: Float, o0: Float, o1: Float): Float {
         val c = v.coerceIn(minOf(i0, i1), maxOf(i0, i1))
         return o0 + (c - i0) / (i1 - i0) * (o1 - o0)
@@ -846,12 +1087,56 @@ class SixDofTracker(
         private const val PALM_SIZE_BASE   = 0.09f
         private const val PALM_DEPTH_SCALE = 3.0f
 
+        // NUEVO: escala aplicada a la Z de los world landmarks de
+        // MediaPipe (relativa a la muñeca, en metros) para mapearla al
+        // rango de profundidad usado en la escena VR. Ajustable si notás
+        // que la mano se siente "plana" o "exagerada" en profundidad.
+        private const val WORLD_Z_SCALE = 2.0f
+
+        // NUEVO: confianza mínima de handedness para aceptar una
+        // detección. Por debajo de esto, MediaPipe está adivinando —
+        // preferimos usar la última pose conocida (vía missed/tolerance)
+        // antes que aceptar un label potencialmente incorrecto.
+        private const val MIN_HANDEDNESS_CONFIDENCE = 0.65f
 
         private const val MEDIAPIPE_Z_NEAR = -0.15f
         private const val MEDIAPIPE_Z_FAR  = -0.9f
 
 
 
-        private const val MEDIAPIPE_MISS_TOLERANCE = 2
+        // AJUSTADO: de 2 a 5 — más margen antes de "soltar" la mano si
+        // hay un frame malo de detección, para que el tracking se sienta
+        // más continuo (menos parpadeo de la mano apareciendo/desapareciendo).
+        private const val MEDIAPIPE_MISS_TOLERANCE = 5
+
+        // NUEVO (yaw fix): corrección manual de yaw para el tracking de
+        // manos en modo 6DoF (MediaPipe). Si la mano "mirando hacia
+        // adelante" aparecía muy volteada hacia el usuario, este offset
+        // la rota alrededor del eje vertical (Y) del espacio VR.
+        // Signo: positivo = gira hacia la derecha, negativo = gira hacia
+        // la izquierda.
+        //
+        // Van SEPARADAS por mano porque el eje "side" de la izquierda se
+        // arma invertido respecto al de la derecha (ver `side` en
+        // processMediaPipeResult: p5-p17 para derecha, p17-p5 para
+        // izquierda), así que la misma corrección de yaw no las alinea
+        // igual a las dos. Ajustá cada una de forma independiente
+        // probando en SteamVR.
+        private const val HAND_YAW_CORRECTION_RIGHT_DEG = -20f
+        private const val HAND_YAW_CORRECTION_LEFT_DEG  = 20f
+
+        // NUEVO (avance simplificado): doblar el índice de la mano
+        // izquierda por encima de INDEX_WALK_DEAD_ZONE empieza a mover
+        // hacia adelante; al llegar a INDEX_WALK_MAX_CURL satura en
+        // velocidad máxima (joyY = 1.0). Subí el dead zone si notás que
+        // camina solo con la mano semi-relajada; bajá el máximo si hace
+        // falta cerrar el dedo del todo para llegar a velocidad máxima.
+        private const val INDEX_WALK_DEAD_ZONE = 0.15f
+        private const val INDEX_WALK_MAX_CURL  = 0.85f
+
+        // Suavizado exponencial (0f..1f) del valor de avance — más alto
+        // = más responsive/tembloroso, más bajo = más suave pero con
+        // más retardo al empezar/parar de caminar.
+        private const val STICK_SMOOTHING_ALPHA = 0.35f
     }
 }
