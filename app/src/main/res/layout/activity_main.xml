@@ -33,7 +33,11 @@
 
     </FrameLayout>
 
-    <!-- Stream SteamVR (H.264) con distorsión de lente -->
+    <!-- Stream SteamVR (H.264) / Video local SBS con distorsión de lente.
+         Este panel es compartido: se usa tanto para el stream de SteamVR
+         como para la reproducción de videos locales en modo SBS, porque
+         ambos casos reutilizan la MISMA Surface OES del StereoGLRenderer
+         (ver MainActivity.playLocalSbsVideo() y streamButton listener). -->
     <FrameLayout
         android:id="@+id/streamPanel"
         android:layout_width="match_parent"
@@ -109,6 +113,26 @@
             android:stateListAnimator="@null"
             android:paddingHorizontal="18dp"
             android:paddingVertical="10dp" />
+
+        <!-- Play/Pausa: SOLO visible cuando streamPanel se está usando para
+             reproducir un video local SBS (no aplica al stream de SteamVR).
+             Se muestra/oculta desde MainActivity al entrar/salir del modo
+             video local. -->
+        <Button
+            android:id="@+id/videoPlayPauseButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center|bottom"
+            android:layout_marginBottom="14dp"
+            android:text="@string/str_pause"
+            android:textColor="@color/text_primary"
+            android:textSize="12sp"
+            android:fontFamily="sans-serif-medium"
+            android:background="@drawable/bg_btn_ghost"
+            android:stateListAnimator="@null"
+            android:paddingHorizontal="18dp"
+            android:paddingVertical="10dp"
+            android:visibility="gone" />
 
         <!-- Ajustes de calidad -->
         <Button
@@ -282,7 +306,7 @@
 
         </LinearLayout>
 
-        <!-- Panel: distorsión / separación / lupa -->
+        <!-- Panel: distorsión / separación / lupa / pantalla completa / entorno con giro (video SBS) -->
         <LinearLayout
             android:id="@+id/streamLensPanel"
             android:layout_width="260dp"
@@ -303,6 +327,95 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="12dp" />
+
+            <!-- Pantalla completa: SOLO visible mientras se reproduce
+                 un video SBS local (ver MainActivity.playLocalSbsVideo() /
+                 stopLocalVideoAndReturnToMenu() / startStream() /
+                 startHubInternal()). Al activarlo, el video llena todo el
+                 FOV de cada ojo en vez de quedar en el rectángulo
+                 world-locked chico. -->
+            <Button
+                android:id="@+id/fullscreenVideoButton"
+                android:layout_width="match_parent"
+                android:layout_height="38dp"
+                android:layout_marginBottom="10dp"
+                android:text="🖥 Pantalla completa: OFF"
+                android:textColor="@color/text_primary"
+                android:fontFamily="sans-serif-medium"
+                android:textSize="11sp"
+                android:background="@drawable/bg_btn_stepper"
+                android:stateListAnimator="@null"
+                android:visibility="gone" />
+
+            <!-- Entorno con giro: SOLO visible mientras se
+                 reproduce un video SBS local en modo ventana. La ventana
+                 del video queda FIJA en el centro y es el fondo
+                 (sbs_background.png) el que gira 360° con la cabeza. Ver
+                 MainActivity -> envModeVideoButton /
+                 StereoGLRenderer.setVideoEnvMode(). -->
+            <Button
+                android:id="@+id/envModeVideoButton"
+                android:layout_width="match_parent"
+                android:layout_height="38dp"
+                android:layout_marginBottom="10dp"
+                android:text="🌎 Entorno con giro: OFF"
+                android:textColor="@color/text_primary"
+                android:fontFamily="sans-serif-medium"
+                android:textSize="11sp"
+                android:background="@drawable/bg_btn_stepper"
+                android:stateListAnimator="@null"
+                android:visibility="gone" />
+
+            <!-- NUEVO — Distancia de la pantalla del video SBS: acerca/
+                 aleja el rectángulo world-locked del video escalando
+                 videoHalfW/videoHalfH (StereoGLRenderer.setVideoWindowScale()).
+                 SOLO visible mientras se reproduce un video SBS local
+                 (mismo patrón que fullscreenVideoButton/envModeVideoButton
+                 de arriba: se muestra/oculta desde
+                 MainActivity.playLocalSbsVideo() /
+                 stopLocalVideoAndReturnToMenu() / startStream() /
+                 startHubInternal()). No tiene efecto en modo pantalla
+                 completa (ahí no hay rectángulo, es todo el FOV). -->
+            <LinearLayout
+                android:id="@+id/videoDistRow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="10dp"
+                android:visibility="gone">
+
+                <Button
+                    android:id="@+id/videoDistDownButton"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:text="−"
+                    android:textSize="16sp"
+                    android:textColor="@color/text_primary"
+                    android:background="@drawable/bg_btn_stepper"
+                    android:stateListAnimator="@null" />
+
+                <TextView
+                    android:id="@+id/videoDistLabelText"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:text="📏 Distancia: 1.00×"
+                    android:textColor="@color/text_primary"
+                    android:fontFamily="sans-serif-medium"
+                    android:textSize="12sp" />
+
+                <Button
+                    android:id="@+id/videoDistUpButton"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:text="+"
+                    android:textSize="16sp"
+                    android:textColor="@color/text_primary"
+                    android:background="@drawable/bg_btn_stepper"
+                    android:stateListAnimator="@null" />
+            </LinearLayout>
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -486,6 +599,29 @@
         android:layout_gravity="bottom|start"
         android:layout_margin="20dp"
         android:text="@string/str_use_hub_menu"
+        android:textColor="@color/text_secondary"
+        android:textSize="12sp"
+        android:fontFamily="sans-serif-medium"
+        android:background="@drawable/bg_btn_ghost"
+        android:stateListAnimator="@null"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="10dp" />
+
+    <!-- Ver videos SBS: reproduce un video local (side-by-side) usando el
+         mismo StereoGLRenderer/Surface que el stream de SteamVR, así
+         hereda gratis distorsión de lente, separación y lupa. Se oculta
+         junto con connectPanel al iniciar reproducción (ver
+         MainActivity.playLocalSbsVideo()). Ubicado justo arriba del
+         botón de tutorial, mismo lado (bottom|end), para que no quede
+         tan abajo en pantalla. -->
+    <Button
+        android:id="@+id/sbsVideoButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="20dp"
+        android:layout_marginBottom="72dp"
+        android:text="@string/str_view_sbs_videos"
         android:textColor="@color/text_secondary"
         android:textSize="12sp"
         android:fontFamily="sans-serif-medium"
@@ -1059,9 +1195,10 @@
 
                     <!-- Sub-panel de Hand tracking: SOLO visible cuando switchHand
                          está activado. Contiene el modo de tracking de manos
-                         (Manos / LED azul / LED verde / Manos+Joycons) y el
-                         switch de vista de cámara + esqueleto. Se
-                         muestra/oculta en MainActivity (switchHand listener). -->
+                         (Manos / LED azul / LED verde / Manos+Joycons), el
+                         zoom de la cámara de manos, y el switch de vista de
+                         cámara + esqueleto. Se muestra/oculta en MainActivity
+                         (switchHand listener). -->
                     <LinearLayout
                         android:id="@+id/handTrackingSubPanel"
                         android:layout_width="match_parent"
@@ -1143,6 +1280,63 @@
                                 android:buttonTint="@color/accent_indigo" />
 
                         </RadioGroup>
+
+                        <!-- Control de zoom de la cámara de tracking de
+                             manos (CameraPreviewManager.setZoomRatio()). Mismo
+                             estilo visual que la fila de "Sensibilidad" 6DoF de
+                             más abajo (stepper +/- con label en el medio). Solo
+                             afecta a la cámara dedicada de manos (modos Manos /
+                             LED / Manos+Joycons), no al 6DoF (que usa la cámara
+                             de ARCore, gestionada aparte). -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="46dp"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical"
+                            android:background="@drawable/bg_tabs_container"
+                            android:paddingHorizontal="10dp"
+                            android:focusable="false"
+                            android:layout_marginBottom="10dp">
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_weight="1"
+                                android:layout_height="wrap_content"
+                                android:text="Zoom cámara"
+                                android:textColor="@color/text_primary"
+                                android:fontFamily="sans-serif-medium"
+                                android:textSize="13sp" />
+
+                            <Button
+                                android:id="@+id/handZoomDownButton"
+                                android:layout_width="30dp"
+                                android:layout_height="30dp"
+                                android:text="−"
+                                android:textSize="14sp"
+                                android:textColor="@color/text_primary"
+                                android:background="@drawable/bg_btn_stepper"
+                                android:stateListAnimator="@null" />
+
+                            <TextView
+                                android:id="@+id/handZoomLabelText"
+                                android:layout_width="86dp"
+                                android:layout_height="wrap_content"
+                                android:gravity="center"
+                                android:text="Zoom cámara: 1.00×"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="10sp" />
+
+                            <Button
+                                android:id="@+id/handZoomUpButton"
+                                android:layout_width="30dp"
+                                android:layout_height="30dp"
+                                android:text="+"
+                                android:textSize="14sp"
+                                android:textColor="@color/text_primary"
+                                android:background="@drawable/bg_btn_stepper"
+                                android:stateListAnimator="@null" />
+
+                        </LinearLayout>
 
                         <LinearLayout
                             android:layout_width="match_parent"
